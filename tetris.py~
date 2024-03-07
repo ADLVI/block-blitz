@@ -1,0 +1,192 @@
+import curses
+import random as rand
+import time
+
+scr = curses.initscr()
+curses.noecho()
+curses.cbreak()
+scr.keypad(True)
+scr.nodelay(True)
+MAXY, MAXX = scr.getmaxyx()
+MAXY = MAXY - 1
+MAXX = MAXX // 2 - 1
+WINX, WINY = MAXX - 4, MAXY - 2
+XOFFSET = 5
+YOFFSET = 2
+EMPTY = " "
+BREAK = curses.ACS_CKBOARD
+# scr.addch(MAXY // 2, MAXX // 2, "X")  # curses.ACS_CKBOARD)
+scr.scrollok(0)
+
+
+class Shape:
+    points = None
+
+    def __init__(self, label, points, color=None, center_idx=None):
+        self.points = points
+        self.color = color if color else curses.COLOR_RED
+        self.label = label
+        self.center_idx = center_idx if center_idx else len(points) // 2
+
+    def draw(self):
+        for point in self.points:
+            scr.addch(
+                point[1] + YOFFSET, point[0] * 2 + XOFFSET, BREAK, self.color
+            )  # curses.ACS_CKBOARD)
+
+    def fall(self):
+        for point in self.points:
+            point[1] += 1
+
+    def action(self, action):
+
+
+            self.points[self.center_idx][0] += 1
+            self.points[self.center_idx][0] = min(self.points[self.center_idx][0], WINX - 2)
+        if action == curses.KEY_LEFT:
+            self.points[self.center_idx][0] -= 1
+            self.points[self.center_idx][0] = max(self.points[self.center_idx][0], 1)
+        if action == curses.KEY_DOWN:
+            self.points[self.center_idx][1] += 1
+    def rotate(self):
+        if self.label == "O":
+            return
+        # Rotate 90 degrees about point in center_idx clockwise
+        # self.center_idx = (self.center_idx + 1) % len(self.points)
+
+        cx, cy = self.points[self.center_idx]
+        for point in self.points:
+            point[0], point[1] = -(point[1] - cy) - cx, (point[0] - cx) - cy
+
+    def __str__(self):
+        return str(self.points)
+
+
+class Game:
+    game = None
+    current_done = False
+
+    def __init__(self):
+        # init 2d list with char values struct
+        self.game = [[[EMPTY, 0] for _ in range(WINX)] for _ in range(WINY)]
+        self.current = self.get_random_shape()
+
+    def frame(self):
+        for row in range(WINY):
+            if row == 0 or row == WINY - 1:
+                scr.addstr(YOFFSET + row, XOFFSET, "_" * (WINX * 2))  #
+            else:
+                # scr.addstr(
+                #     0,
+                #     0,
+                #     f"maxx: {MAXX} maxy: {MAXY} yoffset: {YOFFSET} XOFFSET: {XOFFSET} y+row : {YOFFSET + row} ,x+winx: {XOFFSET + WINX * 2}",
+                # )
+                scr.addch(YOFFSET + row, XOFFSET, "|")
+                scr.addch(YOFFSET + row, XOFFSET + WINX * 2, "|")
+
+    def draw(self):
+        self.frame()
+        for row in range(WINY):
+            for col in range(WINX):
+                scr.addch(YOFFSET + row, XOFFSET + col * 2, self.game[row][col][0])
+        self.current.draw()
+
+    def update(self):
+        if self.current_done:
+            self.get_random_shape()
+            self.current_done = False
+        if self.current and self.can_fall():
+            self.current.fall()
+        else:
+            self.current_done = True
+            self.merge()
+
+    def action(self, action):
+        temp = self.current.points.copy()
+        if action == curses.KEY_RIGHT:
+            for point in temp:
+                point[0] += 1
+                if(point[0] > WINX - 2 or self.game[point[1]][point[0]][0] != EMPTY):
+                    return False
+                self.current.points = temp
+        if action == curses.KEY_LEFT:
+            for point in temp:
+                point[0] -= 1
+                if(point[0] < 1 or self.game[point[1]][point[0]][0] != EMPTY):
+                    return False
+                self.current.points = temp
+        if action == curses.KEY_DOWN:
+            for point in temp:
+                point[1] -= 1
+                if(point[0] > WINX - 2 or self.game[point[1]][point[0]][0] != EMPTY):
+                    return False
+                self.current.points = temp
+    def merge(self):
+        for point in self.current.points:
+            self.game[point[1]][point[0]] = [BREAK, self.current.color]
+
+    def can_fall(self):
+        for point in self.current.points:
+            if point[1] == WINY - 2 or self.game[point[1] + 1][point[0]][0] != EMPTY:
+                return False
+            return True
+
+    def get_random_shape(self):
+        shapes = {
+            "L": {
+                "points": [[0, 0], [0, 1], [0, 2], [1, 0]],
+                "color": curses.COLOR_BLUE,
+                "center_idx": 2,
+            },
+            "J": {
+                "points": [[0, 0], [0, 1], [0, 2], [-1, 0]],
+                "color": curses.COLOR_CYAN,
+                "center_idx": 2,
+            },
+            "O": {
+                "points": [[0, 0], [0, 1], [1, 0], [1, 1]],
+                "color": curses.COLOR_RED,
+                "center_idx": 1,
+            },
+            "S": {
+                "points": [[0, 0], [0, 1], [1, 1], [2, 1]],
+                "color": curses.COLOR_GREEN,
+                "center_idx": 1,
+            },
+            "Z": {
+                "points": [[0, 1], [1, 1], [1, 0], [2, 0]],
+                "color": curses.COLOR_MAGENTA,
+                "center_idx": 1,
+            },
+            "I": {
+                "points": [[0, 0], [0, 1], [0, 2], [0, 3]],
+                "color": curses.COLOR_MAGENTA,
+                "center_idx": 1,
+            },
+        }
+        label = rand.choice(list(shapes.keys()))
+
+        self.current = Shape(label, shapes[label], **shapes[label])
+        self.current_done = False
+        return self.current
+
+
+points = [[-2, -2], [-2, -1], [-2, 0], [-1, 0], [0, 0], [1, 0], [2, 0], [2, 1], [2, 2]]
+
+shape = Shape("X", points, curses.COLOR_GREEN)
+paying = True
+scr.clear()
+while paying:
+    scr.clear()
+    shape.rotate()
+    shape.draw()
+    scr.refresh()
+    try:
+        scr.getch()
+    except KeyboardInterrupt:
+        pass
+
+    # paying = scr.getch() != -1
+    time.sleep(0.5)
+
+scr.refresh()
