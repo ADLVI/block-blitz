@@ -33,16 +33,18 @@ MAX_TEMP_IN_END = 2
 MOVE_BLOCKS = 2
 sample_box = scr.subwin(10, 10 *2, SAMPLE_YOFFSET - 1, SAMPLE_XOFFSET - 1)
 sample_box.box()
+info_box = scr.subwin(10, 10 *2, SAMPLE_YOFFSET - 1 +10 + 2, SAMPLE_XOFFSET - 1)
+info_box.box()
 game_box = scr.subwin(WINY,WINX*2,YOFFSET, XOFFSET)
 game_box.box()
 for color in [curses.COLOR_BLUE,curses.COLOR_MAGENTA, curses.COLOR_GREEN,curses.COLOR_RED,curses.COLOR_CYAN]:
     curses.init_pair(color, color, color)
 ACTIONS = {
-        curses.KEY_RIGHT:">",
-        curses.KEY_LEFT:"<",
-        curses.KEY_UP:'^',
-        curses.KEY_DOWN:'v',
-        " ":'@'
+        curses.KEY_RIGHT:"\N{RIGHTWARDS WHITE ARROW}",
+        curses.KEY_LEFT:"\N{LEFTWARDS WHITE ARROW}",
+        curses.KEY_UP:"\N{UPWARDS WHITE ARROW}",
+        curses.KEY_DOWN:"\N{DOWNWARDS WHITE ARROW}",
+        ord(" "):"\N{CLOCKWISE TOP SEMICIRCLE ARROW}"
         }
 DESIGN_LOCATIONS = {
         'action': [0,WINX * 2],
@@ -233,6 +235,7 @@ class Game:
     lines = 0
     current = None
     next_shape = None
+    last_action = None
 
     def __init__(self):
         # init 2d list with char values struct
@@ -243,24 +246,9 @@ class Game:
     def frame(self):
         game_box.box()
         return
-        i = 0
-        for row in range(WINY):
-            if row == 0 or row == WINY - 1:
-                scr.addstr(YOFFSET + row, XOFFSET, "--" * (WINX))  #
-            else:
-                cr = '/' if i % 2 == 0 else '\\'
-                # scr.addstr(
-                #     0,
-                #     0,
-                #     f"maxx: {MAXX} maxy: {MAXY} yoffset: {YOFFSET} XOFFSET: {XOFFSET} y+row : {YOFFSET + row} ,x+winx: {XOFFSET + WINX * 2}",
-                # )
-                i += 1
-                scr.addch(YOFFSET + row, XOFFSET, cr)
-                scr.addch(YOFFSET + row, XOFFSET + WINX * 2, cr)
-
     def draw(self):
         self.frame()
-        game_box.clear()
+        #game_box.clear()
         game_box.box()
         for j, row in enumerate(self.game):
             for i, cell in enumerate(row):
@@ -273,8 +261,17 @@ class Game:
         self.next_shape.make_sample()
         self.should_refresh = False
     def draw_info(self):
-        scr.addstr(INFO_YOFFSET, INFO_XOFFSET , f"LINES : {self.lines}")
-        scr.addstr(INFO_YOFFSET + 1, INFO_XOFFSET , f"LVL : {self.get_level()}")
+        info_box.clear()
+        info_box.box()
+        info_box.addstr(1, 1, f"LINES : {self.lines}")
+        info_box.addstr(2, 1, f"LEVEL : {self.get_level()}")
+        info_box.addstr(3, 1, f"ACTION : {self.get_action_symbol()}")
+        # scr.addstr(INFO_YOFFSET, INFO_XOFFSET , f"LINES : {self.lines}")
+        # scr.addstr(INFO_YOFFSET + 1, INFO_XOFFSET , f"LVL : {self.get_level()}")
+    def get_action_symbol(self):
+        if self.last_action is None:
+            return "-"
+        return ACTIONS[self.last_action]
     def update(self):
         # scr.addstr(MAXY // 2, MAXX * 3 // 2, str(self.dt()))
         # scr.addch(MAXY // 2, MAXX // 2, "X")
@@ -303,16 +300,14 @@ class Game:
         else:
             if self.current and self.can_fall():
                 if self.dt_passed():
-                    scr.addstr(1, 1, "True")
+                    #scr.addstr(1, 1, "True")
                     self.should_refresh = True
                     self.current.fall()
                     self.last_time = time.time()
             else:
-                # DEBUG
-                scr.addstr(1, 1, "False")
+                # # DEBUG
+                # scr.addstr(1, 1, "False")
                 self.current_done = True
-                #self.last_time = time.time()
-                # get lowset and heighes point logation of shape to chck that range for finding any tetris
         if self.dt_passed() or self.should_refresh:
             scr.clear()
             self.draw()
@@ -336,19 +331,17 @@ class Game:
         if self.trying_action:
             return False
         self.trying_action = True
+        
         temp = copy.deepcopy(self.current.points)
         # self.should_refresh = False
-        # DEBUG
-        if action in ACTIONS:
-            show_info('action', "ACTION : " + str(temp)[:10])
         if action == curses.KEY_RIGHT:
             for point in temp:
                 if (
                     point[0] + MOVE_BLOCKS > WINX - 2
                     or self.game[point[1]][point[0] + MOVE_BLOCKS][0] == BREAK
                 ):
-                    scr.addstr(0, 0, str(point))
-                    scr.refresh()
+                    #scr.addstr(0, 0, str(point))
+                    #scr.refresh()
                     # exit()
                     return False
                 point[0] += MOVE_BLOCKS
@@ -407,6 +400,7 @@ class Game:
             #self.current.shift(-2)
         else:
             return False
+        self.last_action = action
         self.should_refresh = True
 
     def merge(self):
@@ -440,7 +434,8 @@ class Game:
         for point in self.current.points:
             if self.game[1][point[0]][0] == BREAK:
                 # DEBUG
-                show_info([2, 20], str(self.game[1][point[0]]) + " " + str(point))
+                game_box.addstr(point[1], point[0] * 2, "\N{MULTIPLICATION SIGN}")
+                #show_info(point[::-1], "\N{MULTIPLICATION SIGN}")
                 #self.game_dump()
                 return True
         return False
@@ -611,8 +606,6 @@ class Game:
                 #"center_idx": 3,
             },
         }
-        np.random.normal(0, 0.1, (MAXY, MAXX))
-        # normal random choice from shapes
         
         label = None
         if self.next_shape is None:
@@ -621,6 +614,7 @@ class Game:
             self.current = self.gen_normal_shape(label, shape)
         else:
             self.current = self.next_shape
+            label = self.current.label
         while True:
             label_next = rand.choice(list(shapes.keys()))
             if (label_next != label) or  rand.random() < 0.3:
@@ -640,7 +634,7 @@ class Game:
 
 def main():
     PLAYING = True
-    scr.clear()
+    #scr.clear()
     game = Game()
     buffer_action = -1
     while PLAYING:
@@ -654,6 +648,11 @@ def main():
             action = scr.getch()
             while aa := scr.getch() != -1:
                 buffer_action = aa
+            if action == 27:
+                PLAYING = False
+                scr.addstr(YOFFSET + WINY, XOFFSET + WINX, "OK, PLEASE WAIT 3 SECONDS TO EXIT...")
+                scr.refresh()
+                break
             # purg buffer
             game.action(action)
             time.sleep(1 / 100)
